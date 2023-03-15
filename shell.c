@@ -218,16 +218,16 @@ void ExecuteCommand(struct Command* command)
     // using the pipe system call. 2*numSubCommands
     // are necessary because each pipe needs a read
     // and a write end.
-    int pipes[2*numSubCommands];
+    int pipes[2*(numSubCommands-1)];
     
     // If we have more than 1 subcommand, we need
     // to initialize our pipes.
     if(numSubCommands > 1)
     {
         int i;
-        for(i = 0; i < numSubCommands; i+=2)
+        for(i = 0; i < (numSubCommands-1); i++)
         {
-            if(pipe(pipes+i) == -1)
+            if(pipe((pipes + (i * 2))) == -1)
             {
                 fprintf(stderr, "Pipe failed");
                 fflush(stdout);
@@ -247,9 +247,23 @@ void ExecuteCommand(struct Command* command)
             fflush(stdout);
             exit(0);
         }
-        else if(childrenPID[currentSubCommand] == 0)
+        else if(childrenPID[currentSubCommand] == 0) // child (new process)
         {
-            // child (new process)
+            // Note: Pipes are never opened for 1 subcommand
+            if(currentSubCommand == 0 && numSubCommands > 1) // First sub-command of multiple
+            {
+                dup2(pipes[1], fileno(stdout));
+            }
+            else if(currentSubCommand > 0 && currentSubCommand < (numSubCommands-1)) // Middle sub commands
+            {
+                dup2(pipes[2*(currentSubCommand-1)], fileno(stdin));
+                dup2(pipes[2*currentSubCommand+1], fileno(stdout));
+            }
+            else if(currentSubCommand == (numSubCommands-1) && numSubCommands > 1) // last sub-command
+            {
+                dup2(pipes[2*currentSubCommand-2], fileno(stdin));
+            }
+            
             if(currentSubCommand == 0 && command->stdin_redirect != NULL)
             {
                 // add handling for input redirection operator
@@ -262,11 +276,24 @@ void ExecuteCommand(struct Command* command)
                 // which only works for the last sub-command of the command.
             }
             
-            if(numSubCommands == 1)
+            if(numSubCommands > 1)
             {
-                execvp(command->sub_commands[currentSubCommand].argv[0], command->sub_commands[currentSubCommand].argv);
+                int k;
+                for (k = 0; k < 2*(numSubCommands-1); k++)
+                {
+                    //child closes all fds
+                    close(pipes[k]);
+                }
             }
+            execvp(command->sub_commands[currentSubCommand].argv[0], command->sub_commands[currentSubCommand].argv);
         }
+    }
+    
+    int k;
+    for (k = 0; k < (numSubCommands-1)*2; k++)
+    {
+       //Parent closes all fds
+       close(pipes[k]);
     }
     
     int j;
