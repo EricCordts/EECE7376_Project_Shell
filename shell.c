@@ -202,6 +202,14 @@ void ExecuteCommand(struct Command* command)
     
     // Basic structure:
     // Fork and then call execvp
+    // Check if the command should run in the background
+    bool runInBackground = command->background == 1 ? true : false;
+    
+    if(runInBackground)
+    {
+        // Destroy children as they finish without waiting
+        signal(SIGCHLD, SIG_IGN);
+    }
     pid_t childID = fork();
     if(childID < 0)
     {
@@ -212,12 +220,24 @@ void ExecuteCommand(struct Command* command)
     else if(childID == 0)
     {
         // child (new process)
+        // Currently hardcoding to only first sub-command.
         execvp(command->sub_commands[0].argv[0], command->sub_commands[0].argv);
     }
     else
     {
         // parent (original process)
-        wait(NULL);
+        // If not running in background (running in the
+        // foreground), then the parent should wait.
+        
+        if(runInBackground)
+        {
+            printf("[%d]\n", childID);
+            fflush(stdout);
+        }
+        else
+        {
+            wait(NULL);
+        }
     }
 }
 
@@ -238,9 +258,19 @@ int main()
     bool runningShell = true;
     while(runningShell)
     {
+        struct Command command;
+
         // Read a string from the user
         printf("$ ");
+        fflush(stdout);
         fgets(s, sizeof(s), stdin);
+        
+        // Check if user has empty input
+        if(strcmp(&s[0], "\n") == 0)
+        {
+            continue;
+        }
+        
         // Remove newline character, if it exists from the input from user.
         s[strcspn(s,"\n")] = '\0';
         
@@ -256,7 +286,7 @@ int main()
             ReadRedirectsAndBackground(&command);
             
             // Print all commands and their contents
-            PrintCommand(&command);
+            //PrintCommand(&command);
             
             ExecuteCommand(&command);
         }
