@@ -7,6 +7,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <sys/types.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 // These are constants defined from HW2
 #define MAX_SUB_COMMANDS    5
@@ -26,6 +29,15 @@ struct Command
     char* stdout_redirect;
     int background;
 };
+
+// Function Prototypes
+void PrintArgs(char** argv);
+void ReadArgs(char *in, char **argv, int size);
+void ReadCommand(char* line, struct Command* command);
+void PrintCommand(struct Command *command);
+void ReadRedirectsAndBackground(struct Command* command);
+bool KeepRunningShell(const char* userInput);
+void ExecuteCommand(struct Command* command);
 
 void PrintArgs(char** argv)
 {
@@ -181,7 +193,35 @@ void ReadRedirectsAndBackground(struct Command* command)
     }
 }
 
-bool keepRunningShell(const char* userInput)
+// WIP
+void ExecuteCommand(struct Command* command)
+{
+    // Structure
+    // Need to figure out how many subcommands there are
+    // This will tell us how many pipes we need
+    
+    // Basic structure:
+    // Fork and then call execvp
+    pid_t childID = fork();
+    if(childID < 0)
+    {
+        // fork failed; exit
+        fprintf(stderr, "fork failed\n");
+        exit(0);
+    }
+    else if(childID == 0)
+    {
+        // child (new process)
+        execvp(command->sub_commands[0].argv[0], command->sub_commands[0].argv);
+    }
+    else
+    {
+        // parent (original process)
+        wait(NULL);
+    }
+}
+
+bool KeepRunningShell(const char* userInput)
 {
     const char exitCommand[] = "exit";
     if(strcmp(userInput, exitCommand) == 0)
@@ -194,7 +234,7 @@ bool keepRunningShell(const char* userInput)
 int main()
 {
     char s[1000];
-    struct Command command1;
+    struct Command command;
     bool runningShell = true;
     while(runningShell)
     {
@@ -205,18 +245,20 @@ int main()
         s[strcspn(s,"\n")] = '\0';
         
         // Check if the exit command was typed.
-        runningShell = keepRunningShell(s);
+        runningShell = KeepRunningShell(s);
         
         if(runningShell)
         {
             // Read commands based on user input
-            ReadCommand(s, &command1);
+            ReadCommand(s, &command);
             // Read any re-directions and background characters
             // from the last sub-command.
-            ReadRedirectsAndBackground(&command1);
+            ReadRedirectsAndBackground(&command);
             
             // Print all commands and their contents
-            PrintCommand(&command1);
+            PrintCommand(&command);
+            
+            ExecuteCommand(&command);
         }
     }
     return 0;
