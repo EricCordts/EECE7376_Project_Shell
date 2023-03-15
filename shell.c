@@ -196,13 +196,6 @@ void ReadRedirectsAndBackground(struct Command* command)
 // WIP
 void ExecuteCommand(struct Command* command)
 {
-    // Structure
-    // Need to figure out how many subcommands there are
-    // This will tell us how many pipes we need
-    
-    // Basic structure:
-    // Fork and then call execvp
-    // Check if the command should run in the background
     bool runInBackground = command->background == 1 ? true : false;
     const int numSubCommands = command->num_sub_commands;
     if(runInBackground)
