@@ -204,39 +204,92 @@ void ExecuteCommand(struct Command* command)
     // Fork and then call execvp
     // Check if the command should run in the background
     bool runInBackground = command->background == 1 ? true : false;
-    
+    const int numSubCommands = command->num_sub_commands;
     if(runInBackground)
     {
         // Destroy children as they finish without waiting
         signal(SIGCHLD, SIG_IGN);
     }
-    pid_t childID = fork();
-    if(childID < 0)
+    
+    // Create an array of type pid_t to store the PIDs
+    // of each child
+    pid_t childrenPID[numSubCommands];
+    // Create an array to hold the FDs from
+    // using the pipe system call. 2*numSubCommands
+    // are necessary because each pipe needs a read
+    // and a write end.
+    int pipes[2*numSubCommands];
+    
+    // If we have more than 1 subcommand, we need
+    // to initialize our pipes.
+    if(numSubCommands > 1)
     {
-        // fork failed; exit
-        fprintf(stderr, "fork failed\n");
-        exit(0);
+        int i;
+        for(i = 0; i < numSubCommands; i+=2)
+        {
+            if(pipe(pipes+i) == -1)
+            {
+                fprintf(stderr, "Pipe failed");
+                fflush(stdout);
+                exit(0);
+            }
+        }
     }
-    else if(childID == 0)
+    
+    int currentSubCommand;
+    for(currentSubCommand = 0; currentSubCommand < numSubCommands; currentSubCommand++)
     {
-        // child (new process)
-        // Currently hardcoding to only first sub-command.
-        execvp(command->sub_commands[0].argv[0], command->sub_commands[0].argv);
+        childrenPID[currentSubCommand] = fork();
+        if(childrenPID[currentSubCommand] < 0)
+        {
+            // fork failed; exit
+            fprintf(stderr, "fork failed\n");
+            fflush(stdout);
+            exit(0);
+        }
+        else if(childrenPID[currentSubCommand] == 0)
+        {
+            // child (new process)
+            if(currentSubCommand == 0 && command->stdin_redirect != NULL)
+            {
+                // add handling for input redirection operator
+                // which only works for the first sub-command of the command.
+            }
+            
+            if(currentSubCommand == (numSubCommands-1) && command->stdout_redirect != NULL)
+            {
+                // add handling for output redirection operator
+                // which only works for the last sub-command of the command.
+            }
+            
+            if(numSubCommands == 1)
+            {
+                execvp(command->sub_commands[currentSubCommand].argv[0], command->sub_commands[currentSubCommand].argv);
+            }
+        }
     }
-    else
+    
+    int j;
+    for(j = 0; j < numSubCommands; j++)
     {
-        // parent (original process)
-        // If not running in background (running in the
-        // foreground), then the parent should wait.
-        
+        int status;
+
         if(runInBackground)
         {
-            printf("[%d]\n", childID);
-            fflush(stdout);
+            if(j == (numSubCommands-1))
+            {
+                printf("[%d]\n", childrenPID[j]);
+                fflush(stdout);
+            }
+            
+            // Wait by PID with WNOHANG flag so that the parent
+            // can proceed
+            waitpid(childrenPID[j], &status, WNOHANG);
         }
         else
         {
-            wait(NULL);
+            // Wait by PID with WUNTRACED flag so that parent is stalled.
+            waitpid(childrenPID[j], &status, WUNTRACED);
         }
     }
 }
