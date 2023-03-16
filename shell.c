@@ -193,7 +193,6 @@ void ReadRedirectsAndBackground(struct Command* command)
     }
 }
 
-// WIP
 void ExecuteCommand(struct Command* command)
 {
     bool runInBackground = command->background == 1 ? true : false;
@@ -278,7 +277,16 @@ void ExecuteCommand(struct Command* command)
                     close(pipes[k]);
                 }
             }
-            execvp(command->sub_commands[currentSubCommand].argv[0], command->sub_commands[currentSubCommand].argv);
+            // Add error checking code for execvp
+            int statusCode = execvp(command->sub_commands[currentSubCommand].argv[0], command->sub_commands[currentSubCommand].argv);
+            
+            // If the status from execvp is -1, then an invalid command was used.
+            if(statusCode == -1)
+            {
+                fprintf(stderr, "%s: Command not found.\n", command->sub_commands[currentSubCommand].argv[0]);
+                fflush(stdout);
+                exit(0);
+            }
         }
     }
     
@@ -326,12 +334,11 @@ bool KeepRunningShell(const char* userInput)
 
 int main()
 {
-    char s[1000];
-    struct Command command;
     bool runningShell = true;
     while(runningShell)
     {
         struct Command command;
+        char s[1000];
 
         // Read a string from the user
         printf("$ ");
