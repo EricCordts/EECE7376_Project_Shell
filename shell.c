@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 // These are constants defined from HW2
 #define MAX_SUB_COMMANDS    5
@@ -260,12 +261,30 @@ void ExecuteCommand(struct Command* command)
             {
                 // add handling for input redirection operator
                 // which only works for the first sub-command of the command.
+                int openFd = open(command->stdin_redirect, O_RDONLY, 0);
+                if(openFd == -1)
+                {
+                    fprintf(stderr, "%s: File not found\n", command->stdin_redirect);
+                    fflush(stdout);
+                    exit(0);
+                }
+                dup2(openFd, fileno(stdin));
+                close(openFd);
             }
             
             if(currentSubCommand == (numSubCommands-1) && command->stdout_redirect != NULL)
             {
                 // add handling for output redirection operator
                 // which only works for the last sub-command of the command.
+                int newFileFd = creat(command->stdout_redirect, S_IRUSR | S_IWUSR);
+                if(newFileFd == -1)
+                {
+                    fprintf(stderr, "%s: Cannot create file\n", command->stdout_redirect);
+                    fflush(stdout);
+                    exit(0);
+                }
+                dup2(newFileFd, fileno(stdout));
+                close(newFileFd);
             }
             
             if(numSubCommands > 1)
