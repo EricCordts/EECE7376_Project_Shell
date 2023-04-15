@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <sys/wait.h>
 
 // These are constants defined from HW2
 #define MAX_SUB_COMMANDS    5
